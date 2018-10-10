@@ -1,0 +1,217 @@
+---
+title: "Import PDF Table into R"
+author: "Leila"
+date: "October 10, 2018"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+## R Session Setup
+
+
+```{r setup, echo = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+#### Load function libraries that will be used
+
+*Note:* The libraries must already be installed. If they aren't, they can be installed by running:
+
+```{r, eval = FALSE}
+install.packages(c("kableExtra",
+                   "knitr",
+                   "tabulizer", 
+                   "dplyr", 
+                   "purrr",
+                   "janitor"),
+                 dependencies = TRUE)
+```
+
+Libraries need only be installed once, but they need to be loaded R session.
+
+```{r libs, warning=FALSE}
+# Load function libraries
+
+library(kableExtra) # for html formatting
+library(knitr) # for html formatting
+library(tabulizer) # For reading the PDFS
+library(dplyr, warn.conflicts = FALSE) # For intuitive data manipulation
+library(purrr) # For combining output of each page into one table
+library(janitor) # For cleaning up row name formatting
+
+```
+
+
+## PDF import
+
+```{r import}
+# Specify location of PDF (can be a URL or local file path)
+data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
+
+# Use the extract_tables function to scan the file and pull data tables:
+output <- tabulizer::extract_tables(data_url)
+```
+
+*Note from Leila:* This took 29 seconds on my desktop. This times the task:
+
+```{r time, eval = FALSE}
+system.time(output <- tabulizer::extract_tables(data_url))
+```
+
+
+
+### Inspect extraction output
+
+Observations: 
+
+* Output is a list (set of items), with one list item per page
+* Each list item is a matrix with 8 columns
+
+Observed tasks for later:
+
+* A matrix can only have one data type, so all data was imported as character strings. Type conversion will need to be done
+* The column names got imported as the first row of data on the first page
+
+```{r check}
+
+# What type of object?
+class(output)
+
+# How many list objects?
+length(output)
+
+# What is the type of object for each list item?
+lapply(output, class) %>% 
+  unlist() %>%
+  unique()
+
+# What is the data type in the matrices?
+lapply(output,
+       function(x) class(x[1,1])) %>% unlist() %>% 
+  unique()
+
+# What's the dimension of each list item?
+lapply(output, dim) %>%
+  do.call(rbind, .)
+
+# Check that the last page loaded correctly 
+# We can verify by looking at the file that this is correct
+output[[length(output)]] %>%        # Subset to last list item
+  head(n = 1) %>%                  # Subset to first row
+  as.data.frame() %>% 
+  kable() %>%           # print data as table
+  kable_styling()       # format the table for html output
+
+
+output[[length(output)]] %>% 
+  tail(n = 1) %>% 
+  as.data.frame() %>%
+  kable() %>%
+  kable_styling()
+
+# Print the top and bottom 3 rows of the file
+
+# Top of first list item
+head(output[[1]], n = 3) %>% 
+  as.data.frame() %>%
+  kable() %>%
+  kable_styling()
+
+# Bottom of last list item
+tail(output[[length(output)]], n = 3) %>% 
+  as.data.frame() %>% 
+  kable() %>%
+  kable_styling()
+```
+
+## Organize output into an analyzable format
+
+Tasks: 
+
+1. Set column names (they were imported as the first row of data on page 1)
+1. Combine all the pages into 1 table
+1. Format the columns as necessary
+
+### 1. Set column names
+
+```{r getnames}
+# Save the first row of page 1 as a character vector. 
+# Subset output to the first page, first row, all columns
+column_names <- output[[1]][1,] 
+
+# View it
+# It's messy with special characters, so it will have to be cleaned later.
+column_names
+```
+
+
+
+```{r setnames}
+# Set the column names for each page and save as new list
+output_named <- purrr::map(
+  # Specify list object
+  .x = output,     
+  # Write a function to set col names for each list item
+  .f = function(x) {  
+    # Get list item
+    named_table <- x           
+    # Set column names
+    colnames(named_table) <- column_names  
+    # Return named list item as output
+    return(named_table)   
+    }) 
+```
+
+### 2. Combine list items into 1 table
+
+```{r combine}
+# Combine the list items
+output_combined <- do.call(rbind, output_named) %>%  
+  # Convert to a data frame format
+  as.data.frame() %>%   
+  # Remove the first row (column names)
+  slice(-1)                                      
+
+# Inspect: What data types do we have in the columns?
+# All factors <fct>
+glimpse(output_combined)
+
+```
+
+### 3. Apply formatting
+
+```{r cleanup}
+
+# Convert dates to dates, no_of_employees to a number
+output_clean <- output_combined %>% 
+  # Clean up the name syntax to be a consistent format
+  clean_names() %>% 
+  # Set date formats
+  mutate_at(.vars = c("notice_date", "effective_date", "received_date"),
+            .funs = function(x) as.Date(x, format = "%m/%d/%Y")) %>% 
+  # Set numeric format
+  mutate_at(.vars = "no_of_employees",
+            .funs = as.numeric)
+
+# Look at the data types after type conversion
+glimpse(output_clean)
+
+```
+
+## Write output to csv
+
+Unless specified otherwise, R will write to the current working directory
+
+```{r output}
+# Print path of current working directory
+getwd()
+
+# Write output
+write.csv(output_clean, "filename.csv")
+```
+
+
