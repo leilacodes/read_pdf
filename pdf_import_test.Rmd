@@ -8,36 +8,34 @@ output:
     toc_float: true
 ---
 
+_Anyone who has worked with data knows that collecting it into an analyzable format is the first hurdle after a project is defined. Even for analysts who are the lucky recipients of curated, clean data, this is rarely a trivial task and can easily become a time-consuming and tedious nightmare. Luckily, since it's such a common problem, many programming angels have written helpful function packages to assist this process._
+
+_This data import series will walk through examples which use various R packages to import data freely available online. It's intended as a beginner series, so each post will include both the minimal code snippet to complete the task at hand + an annotated version exaplaining what's going on in each line._
+
+_I've included in the annotated segments the exploratory code used to determine how to manipulate the data into the desired format. While this intermediate exploration wouldn't appear in production code, it's an unavoidable step that will look different with each new project, so I've included it to illustrate a more complete picture of the data import process. It is not meant to represent or be confused with exploratory data analysis (the in-depth look at the data that comes after it is prepared), though the two steps often overlap._
+
+## Task: Import PDF Data
+
+This example uses the R library **tabulizer** for importing a dataset stored as a table in a PDF document.  It's adapted from a [tutorial by Troy Walters](https://www.r-bloggers.com/extracting-tables-from-pdfs-in-r-using-the-tabulizer-package/) on R-Bloggers. The sample data is from the California Employment Development Department, which publishes a yearly [list of layoffs](https://www.edd.ca.gov/jobs_and_training/Layoff_Services_WARN.htm) in the state of California that fall under the WARN act. The file used is the [2017-2018 Warn Report](https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf), containing layoffs from July 1, 2017 through June 30, 2018.
+
+The data is relatively clean to start with: the PDF is machine readable, and the data is in a table format.
+
 ## R Session Setup
 
 
 ```{r setup, echo = FALSE}
 
 knitr::opts_chunk$set(echo = TRUE)
+library(kableExtra) # For html formatting
+library(knitr) # For html formatting
 
 ```
 
-#### Load function libraries that will be used
-
-*Note:* The libraries must already be installed. If they aren't, they can be installed by running:
-
-```{r, eval = FALSE}
-install.packages(c("kableExtra",
-                   "knitr",
-                   "tabulizer", 
-                   "dplyr", 
-                   "purrr",
-                   "janitor"),
-                 dependencies = TRUE)
-```
-
-Libraries need only be installed once, but they need to be loaded R session.
+Load function libraries that will be used. Libraries need only be installed once, but they need to be loaded each new R session.
 
 ```{r libs, warning=FALSE}
 # Load function libraries
 
-library(kableExtra) # for html formatting
-library(knitr) # for html formatting
 library(tabulizer) # For reading the PDFS
 library(dplyr, warn.conflicts = FALSE) # For intuitive data manipulation
 library(purrr) # For combining output of each page into one table
@@ -45,6 +43,54 @@ library(janitor) # For cleaning up row name formatting
 
 ```
 
+# TL;DR
+
+Just the essential lines to import, clean, and export the data
+
+```{r}
+# Specify location of PDF (can be a URL or local file path)
+data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
+
+# Use the extract_tables() function to scan the file and pull data tables:
+output <- tabulizer::extract_tables(data_url)
+
+# Save the first row of page 1 as a character vector:
+# Subset output to the first page, first row, all columns
+column_names <- output[[1]][1,] 
+
+# Set the column names for each page and save as new list
+output_named <- purrr::map(
+  # Specify list object
+  .x = output,
+  .f = function(x) {  
+    named_table <- x           
+    colnames(named_table) <- column_names  
+    return(named_table)   
+    }) 
+
+# Combine the list items
+output_combined <- do.call(rbind, output_named) %>%  
+  as.data.frame() %>%   
+  slice(-1)    
+
+# Clean col names, convert dates to dates, convert no_of_employees to a number
+output_clean <- output_combined %>% 
+  clean_names() %>% 
+  mutate_at(.vars = c("notice_date", "effective_date", "received_date"),
+            .funs = function(x) as.Date(x, format = "%m/%d/%Y")) %>% 
+  mutate_at(.vars = "no_of_employees",
+            .funs = as.numeric)
+
+# All done
+# Write output
+write.csv(output_clean, "filename.csv")
+
+```
+
+Top of the table:
+`r head(output_clean) %>% kable() %>% kable_styling()`
+
+# Detailed Process Description
 
 ## PDF import
 
@@ -52,17 +98,9 @@ library(janitor) # For cleaning up row name formatting
 # Specify location of PDF (can be a URL or local file path)
 data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
 
-# Use the extract_tables function to scan the file and pull data tables:
+# Use the extract_tables() function to scan the file and pull data tables:
 output <- tabulizer::extract_tables(data_url)
 ```
-
-*Note from Leila:* This took 29 seconds on my desktop. This times the task:
-
-```{r time, eval = FALSE}
-system.time(output <- tabulizer::extract_tables(data_url))
-```
-
-
 
 ### Inspect extraction output
 
@@ -177,6 +215,7 @@ output_combined <- do.call(rbind, output_named) %>%
   slice(-1)                                      
 
 # Inspect: What data types do we have in the columns?
+# The glimpse() function lists each column, the data type, and the first few values
 # All factors <fct>
 glimpse(output_combined)
 
