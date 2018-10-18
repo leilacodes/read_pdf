@@ -225,9 +225,9 @@ div.tocify {
 </div>
 
 
-<p><em>Anyone who has worked with data knows that collecting it into an analyzable format is the first hurdle after a project is defined. Even for analysts who are the lucky recipients of curated, clean data, this is rarely a trivial task and can easily become a time-consuming and tedious nightmare. Luckily, since it’s such a common problem, many programming angels have written helpful function packages to assist this process.</em></p>
-<p><em>This data import series will walk through examples which use various R packages to import data freely available online. It’s intended as a beginner series, so each post will include both the minimal code snippet to complete the task at hand + an annotated version exaplaining what’s going on in each line.</em></p>
-<p><em>I’ve included in the annotated segments the exploratory code used to determine how to manipulate the data into the desired format. While this intermediate exploration wouldn’t appear in production code, it’s an unavoidable step that will look different with each new project, so I’ve included it to illustrate a more complete picture of the data import process. It is not meant to represent or be confused with exploratory data analysis (the in-depth look at the data that comes after it is prepared), though the two steps often overlap.</em></p>
+<p>Anyone who has worked with data knows that collecting it into an analyzable format is the first hurdle after a project is defined. Even for analysts who are the lucky recipients of curated, clean data, this is rarely a trivial task and can easily become a time-consuming and tedious distraction from the data analysis. Luckily, since it’s such a common problem, many programming angels have written helpful function packages to assist this process.</p>
+<p>This data import series will walk through examples which use various R packages to import data freely available online. It’s intended as a beginner series, so each post will include both the minimal code snippet to complete the task at hand + an annotated version explaining what’s going on in each line.</p>
+<p>I’ve included in the annotated segments the exploratory code used to determine how to manipulate the data into the desired format. While this intermediate exploration wouldn’t appear in production code, it’s an unavoidable step that will look different with each new project, so I’ve included it to illustrate a more complete picture of the data import process. It is not meant to represent or be confused with exploratory data analysis (the in-depth look at the data that comes after it is prepared), though the two steps often overlap.</p>
 <div id="task-import-pdf-data" class="section level2">
 <h2>Task: Import PDF Data</h2>
 <p>This example uses the R library <strong>tabulizer</strong> for importing a dataset stored as a table in a PDF document. It’s adapted from a <a href="https://www.r-bloggers.com/extracting-tables-from-pdfs-in-r-using-the-tabulizer-package/">tutorial by Troy Walters</a> on R-Bloggers. The sample data is from the California Employment Development Department, which publishes a yearly <a href="https://www.edd.ca.gov/jobs_and_training/Layoff_Services_WARN.htm">list of layoffs</a> in the state of California that fall under the WARN act. The file used is the <a href="https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf">2017-2018 Warn Report</a>, containing layoffs from July 1, 2017 through June 30, 2018.</p>
@@ -236,53 +236,48 @@ div.tocify {
 <div id="r-session-setup" class="section level2">
 <h2>R Session Setup</h2>
 <p>Load function libraries that will be used. Libraries need only be installed once, but they need to be loaded each new R session.</p>
-<pre class="r"><code># Load function libraries
-
-library(tabulizer) # For reading the PDFS
-library(dplyr, warn.conflicts = FALSE) # For intuitive data manipulation
-library(purrr) # For combining output of each page into one table
-library(janitor) # For cleaning up row name formatting</code></pre>
+<p><strong>tabulizer</strong> is used for its <code>extract_tables</code> function to read PDFs. <strong>dplyr</strong> is used for convenient, easy-to-read data wrangling <strong>janitor</strong> is used to clean up table name formatting</p>
+<pre class="r"><code>library(tabulizer)
+library(dplyr, warn.conflicts = FALSE)
+library(janitor)</code></pre>
+<hr />
 </div>
-<div id="tldr" class="section level1">
-<h1>TL;DR</h1>
-<p>Just the essential lines to import, clean, and export the data</p>
-<pre class="r"><code># Specify location of PDF (can be a URL or local file path)
-data_url &lt;- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
-
-# Use the extract_tables() function to scan the file and pull data tables:
-output &lt;- tabulizer::extract_tables(data_url)
-
-# Save the first row of page 1 as a character vector:
-# Subset output to the first page, first row, all columns
-column_names &lt;- output[[1]][1,] 
-
-# Set the column names for each page and save as new list
-output_named &lt;- purrr::map(
-  # Specify list object
-  .x = output,
-  .f = function(x) {  
-    named_table &lt;- x           
-    colnames(named_table) &lt;- column_names  
-    return(named_table)   
-    }) 
-
-# Combine the list items
-output_combined &lt;- do.call(rbind, output_named) %&gt;%  
+<div id="section-1-tldr" class="section level1">
+<h1>Section 1: TL;DR</h1>
+<blockquote>
+<p>Just the essential lines to import, clean, and export the data.</p>
+</blockquote>
+<p>Specify location of PDF (can be a URL or local file path):</p>
+<pre class="r"><code>data_url &lt;- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' </code></pre>
+<p>Use the extract_tables() function to scan the file and pull data tables:</p>
+<pre class="r"><code>output &lt;- tabulizer::extract_tables(data_url)</code></pre>
+<p>Grab the column names, which are the first row of page 1:</p>
+<pre class="r"><code>column_names &lt;- output[[1]][1,] </code></pre>
+<p>Set the column names in the output and save as new list:</p>
+<pre class="r"><code>output_named &lt;- lapply(
+  X = output,
+  FUN = function(x) {
+  named_table &lt;- x           
+  colnames(named_table) &lt;- column_names  
+  return(named_table)   
+  }) </code></pre>
+<p>Combine the list items:</p>
+<pre class="r"><code>output_combined &lt;- do.call(rbind, output_named) %&gt;%  
   as.data.frame() %&gt;%   
-  slice(-1)    
-
-# Clean col names, convert dates to dates, convert no_of_employees to a number
-output_clean &lt;- output_combined %&gt;% 
+  slice(-1)    </code></pre>
+<p>Clean column names, convert dates to dates, convert <code>no_of_employees</code> to a number:</p>
+<pre class="r"><code>output_clean &lt;- output_combined %&gt;% 
   clean_names() %&gt;% 
-  mutate_at(.vars = c(&quot;notice_date&quot;, &quot;effective_date&quot;, &quot;received_date&quot;),
+  mutate_at(.vars = c(&quot;notice_date&quot;,
+                      &quot;effective_date&quot;,
+                      &quot;received_date&quot;),
             .funs = function(x) as.Date(x, format = &quot;%m/%d/%Y&quot;)) %&gt;% 
   mutate_at(.vars = &quot;no_of_employees&quot;,
-            .funs = as.numeric)
-
-# All done
-# Write output
-write.csv(output_clean, &quot;filename.csv&quot;)</code></pre>
-Top of the table:
+            .funs = as.numeric)</code></pre>
+<p>Optional: write output to a csv. By default, write.csv() will write the file to the current working directory. To view the current working directory, run <code>getwd()</code> in the console.</p>
+<pre class="r"><code>write.csv(output_clean, &quot;filename.csv&quot;)</code></pre>
+<div id="all-done-heres-what-the-top-of-the-table-looks-like" class="section level3">
+<h3>All done! Here’s what the top of the table looks like:</h3>
 <table class="table" style="margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
@@ -471,46 +466,46 @@ Closure Permanent
 </tr>
 </tbody>
 </table>
+<hr />
+</div>
 </div>
 <div id="detailed-process-description" class="section level1">
 <h1>Detailed Process Description</h1>
+<blockquote>
+<p>This section is a more heavily-annotated version of the code above, <strong>plus</strong> the exploratory code used to determine each step.</p>
+</blockquote>
+<p>The pipe <code>%&gt;%</code> is a convenient function loaded with the <code>dplyr</code> package (originally from the <code>magrittr</code> package). It allows us to chain tasks together in a flow. When a <code>%&gt;%</code> appears between two functions, the output from the former function is “funneled” into the latter function as its input.</p>
 <div id="pdf-import" class="section level2">
 <h2>PDF import</h2>
-<pre class="r"><code># Specify location of PDF (can be a URL or local file path)
-data_url &lt;- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
-
-# Use the extract_tables() function to scan the file and pull data tables:
-output &lt;- tabulizer::extract_tables(data_url)</code></pre>
-<div id="inspect-extraction-output" class="section level3">
-<h3>Inspect extraction output</h3>
-<p>Observations:</p>
-<ul>
-<li>Output is a list (set of items), with one list item per page</li>
-<li>Each list item is a matrix with 8 columns</li>
-</ul>
-<p>Observed tasks for later:</p>
-<ul>
-<li>A matrix can only have one data type, so all data was imported as character strings. Type conversion will need to be done</li>
-<li>The column names got imported as the first row of data on the first page</li>
-</ul>
-<pre class="r"><code># What type of object?
-class(output)</code></pre>
+<p>Specify location of PDF (can be a URL or local file path):</p>
+<pre class="r"><code>data_url &lt;- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' </code></pre>
+<p>Use the extract_tables() function to scan the file and pull data tables:</p>
+<pre class="r"><code>output &lt;- tabulizer::extract_tables(data_url)</code></pre>
+<div id="exploratory-inspect-extraction-output" class="section level3">
+<h3>Exploratory: Inspect extraction output</h3>
+<p>Look at the form and contents of the output in order to determine what to do with it.</p>
+<p>What type of object is returned by <code>extract_tables()</code>?</p>
+<pre class="r"><code>class(output)</code></pre>
 <pre><code>## [1] &quot;list&quot;</code></pre>
-<pre class="r"><code># How many list objects?
-length(output)</code></pre>
+<p>How many list objects?</p>
+<pre class="r"><code>length(output)</code></pre>
 <pre><code>## [1] 14</code></pre>
-<pre class="r"><code># What is the type of object for each list item?
-lapply(output, class) %&gt;% 
+<p>The list consists of one item per page of the PDF.</p>
+<p>What type of object are these list items?</p>
+<pre class="r"><code>lapply(output, class) %&gt;% 
   unlist() %&gt;%
   unique()</code></pre>
 <pre><code>## [1] &quot;matrix&quot;</code></pre>
-<pre class="r"><code># What is the data type in the matrices?
-lapply(output,
-       function(x) class(x[1,1])) %&gt;% unlist() %&gt;% 
+<p>Each item is a matrix.</p>
+<p>A matrix is a 2-dimensional array of values of uniform type. What is the data type of the matrices?</p>
+<pre class="r"><code>lapply(output,
+       function(x) class(x[1,1])) %&gt;% 
+  unlist() %&gt;% 
   unique()</code></pre>
 <pre><code>## [1] &quot;character&quot;</code></pre>
-<pre class="r"><code># What's the dimension of each list item?
-lapply(output, dim) %&gt;%
+<p>What’s the dimension of each list item?</p>
+<p>After <code>lapply</code> returns a list of the dimensions of each matrix, <code>do.call</code> funnels them in as the arguments to the <code>rbind</code> function, effectively binding the rows into one table.</p>
+<pre class="r"><code>lapply(output, dim) %&gt;%
   do.call(rbind, .)</code></pre>
 <pre><code>##       [,1] [,2]
 ##  [1,]   41    8
@@ -527,143 +522,14 @@ lapply(output, dim) %&gt;%
 ## [12,]   48    8
 ## [13,]   48    8
 ## [14,]   29    8</code></pre>
-<pre class="r"><code># Check that the last page loaded correctly 
-# We can verify by looking at the file that this is correct
-output[[length(output)]] %&gt;%        # Subset to last list item
-  head(n = 1) %&gt;%                  # Subset to first row
-  as.data.frame() %&gt;% 
-  kable() %&gt;%           # print data as table
-  kable_styling()       # format the table for html output</code></pre>
-<table class="table" style="margin-left: auto; margin-right: auto;">
-<thead>
-<tr>
-<th style="text-align:left;">
-V1
-</th>
-<th style="text-align:left;">
-V2
-</th>
-<th style="text-align:left;">
-V3
-</th>
-<th style="text-align:left;">
-V4
-</th>
-<th style="text-align:left;">
-V5
-</th>
-<th style="text-align:left;">
-V6
-</th>
-<th style="text-align:left;">
-V7
-</th>
-<th style="text-align:left;">
-V8
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left;">
-06/13/2018
-</td>
-<td style="text-align:left;">
-08/14/2018
-</td>
-<td style="text-align:left;">
-06/18/2018
-</td>
-<td style="text-align:left;">
-Land O Lakes, Inc.
-</td>
-<td style="text-align:left;">
-Tulare
-</td>
-<td style="text-align:left;">
-Tulare County
-</td>
-<td style="text-align:left;">
-84
-</td>
-<td style="text-align:left;">
-Layoff Unknown at this time
-</td>
-</tr>
-</tbody>
-</table>
-<pre class="r"><code>output[[length(output)]] %&gt;% 
-  tail(n = 1) %&gt;% 
-  as.data.frame() %&gt;%
-  kable() %&gt;%
-  kable_styling()</code></pre>
-<table class="table" style="margin-left: auto; margin-right: auto;">
-<thead>
-<tr>
-<th style="text-align:left;">
-</th>
-<th style="text-align:left;">
-V1
-</th>
-<th style="text-align:left;">
-V2
-</th>
-<th style="text-align:left;">
-V3
-</th>
-<th style="text-align:left;">
-V4
-</th>
-<th style="text-align:left;">
-V5
-</th>
-<th style="text-align:left;">
-V6
-</th>
-<th style="text-align:left;">
-V7
-</th>
-<th style="text-align:left;">
-V8
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left;">
-[29,]
-</td>
-<td style="text-align:left;">
-06/28/2018
-</td>
-<td style="text-align:left;">
-08/28/2018
-</td>
-<td style="text-align:left;">
-06/29/2018
-</td>
-<td style="text-align:left;">
-Deluxe Entertainment Services Group Inc.
-</td>
-<td style="text-align:left;">
-Burbank
-</td>
-<td style="text-align:left;">
-Los Angeles
-</td>
-<td style="text-align:left;">
-2
-</td>
-<td style="text-align:left;">
-Layoff Permanent
-</td>
-</tr>
-</tbody>
-</table>
-<pre class="r"><code># Print the top and bottom 3 rows of the file
-
-# Top of first list item
-head(output[[1]], n = 3) %&gt;% 
+<p>Except for the first and last, the matrices have 48 rows x 8 columns.</p>
+<p>Look at the data: print the top and bottom 3 rows of the file.</p>
+<ul>
+<li>The <code>[[ ]]</code> notation specifies which list item(s) to select. <code>length(output)</code> lets us access the last list item.</li>
+<li><code>head</code> and <code>tail</code> print the top and bottom (respectively) of the object (in this case, a matrix). <code>n</code> denotes how many elements (in this case, rows) to print.</li>
+<li>The <code>kable-</code> lines are for presentation only – they stylize the data printout.</li>
+</ul>
+<pre class="r"><code>head(output[[1]], n = 3) %&gt;% 
   as.data.frame() %&gt;%
   kable() %&gt;%
   kable_styling()</code></pre>
@@ -777,8 +643,7 @@ Layoff Unknown at this time
 </tr>
 </tbody>
 </table>
-<pre class="r"><code># Bottom of last list item
-tail(output[[length(output)]], n = 3) %&gt;% 
+<pre class="r"><code>tail(output[[length(output)]], n = 3) %&gt;% 
   as.data.frame() %&gt;% 
   kable() %&gt;%
   kable_styling()</code></pre>
@@ -903,6 +768,88 @@ Layoff Permanent
 </tr>
 </tbody>
 </table>
+<p>Quality check: Look at the first and last row of the last page to Check that it loaded correctly. (Same code structure as above).</p>
+<pre class="r"><code>output[[length(output)]] %&gt;%  
+  head(n = 1) %&gt;%             
+  kable() %&gt;%           
+  kable_styling()       </code></pre>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<tbody>
+<tr>
+<td style="text-align:left;">
+06/13/2018
+</td>
+<td style="text-align:left;">
+08/14/2018
+</td>
+<td style="text-align:left;">
+06/18/2018
+</td>
+<td style="text-align:left;">
+Land O Lakes, Inc.
+</td>
+<td style="text-align:left;">
+Tulare
+</td>
+<td style="text-align:left;">
+Tulare County
+</td>
+<td style="text-align:left;">
+84
+</td>
+<td style="text-align:left;">
+Layoff Unknown at this time
+</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>output[[length(output)]] %&gt;% 
+  tail(n = 1) %&gt;% 
+  kable() %&gt;%
+  kable_styling()</code></pre>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<tbody>
+<tr>
+<td style="text-align:left;">
+[29,]
+</td>
+<td style="text-align:left;">
+06/28/2018
+</td>
+<td style="text-align:left;">
+08/28/2018
+</td>
+<td style="text-align:left;">
+06/29/2018
+</td>
+<td style="text-align:left;">
+Deluxe Entertainment Services Group Inc.
+</td>
+<td style="text-align:left;">
+Burbank
+</td>
+<td style="text-align:left;">
+Los Angeles
+</td>
+<td style="text-align:left;">
+2
+</td>
+<td style="text-align:left;">
+Layoff Permanent
+</td>
+</tr>
+</tbody>
+</table>
+<p>Key Observations:</p>
+<ul>
+<li>The output of <code>extract_tabbles()</code> is a list, with one list item per page.</li>
+<li>Each list item is a matrix with 8 columns.</li>
+</ul>
+<p>Observed tasks for later:</p>
+<ul>
+<li>A matrix can only have one data type, so all data was imported as character strings. Type conversion will need to be done.</li>
+<li>The column names got imported as the first row of data on the first page.</li>
+</ul>
 </div>
 </div>
 <div id="organize-output-into-an-analyzable-format" class="section level2">
@@ -915,43 +862,37 @@ Layoff Permanent
 </ol>
 <div id="set-column-names" class="section level3">
 <h3>1. Set column names</h3>
-<pre class="r"><code># Save the first row of page 1 as a character vector. 
-# Subset output to the first page, first row, all columns
-column_names &lt;- output[[1]][1,] 
-
-# View it
-# It's messy with special characters, so it will have to be cleaned later.
+<p>Save the first row of page 1 as a character vector.</p>
+<ul>
+<li><code>[[1]]</code> subsets the output to the data from the first page of the PDF (a matrix)</li>
+<li><code>[1,]</code> subsets the matrix to the first row. The blank after the <code>,</code> means that no columns are specified, so all columns will be returned.</li>
+</ul>
+<pre class="r"><code>column_names &lt;- output[[1]][1,] 
 column_names</code></pre>
 <pre><code>## [1] &quot;Notice Date&quot;       &quot;Effective\rDate&quot;   &quot;Received\rDate&quot;   
 ## [4] &quot;Company&quot;           &quot;City&quot;              &quot;County&quot;           
 ## [7] &quot;No. Of\rEmployees&quot; &quot;Layoff/Closure&quot;</code></pre>
-<pre class="r"><code># Set the column names for each page and save as new list
-output_named &lt;- purrr::map(
-  # Specify list object
-  .x = output,     
-  # Write a function to set col names for each list item
-  .f = function(x) {  
-    # Get list item
-    named_table &lt;- x           
-    # Set column names
+<p>Set the column names for each page and save as new list called <code>output_named</code>.</p>
+<ul>
+<li><code>lapply</code> applies the specified function <code>FUN</code> to each list item from list <code>X</code>.</li>
+<li><code>function(x) {...}</code> defines a function which sets <code>column_names</code> as the column names of the matrix <code>x</code>, then returns the named matrix as the function output.</li>
+</ul>
+<pre class="r"><code>output_named &lt;- lapply(
+  X = output,     
+  FUN = function(x) {
+    named_table &lt;- x  
     colnames(named_table) &lt;- column_names  
-    # Return named list item as output
     return(named_table)   
     }) </code></pre>
 </div>
 <div id="combine-list-items-into-1-table" class="section level3">
 <h3>2. Combine list items into 1 table</h3>
-<pre class="r"><code># Combine the list items
-output_combined &lt;- do.call(rbind, output_named) %&gt;%  
-  # Convert to a data frame format
+<p>We’ve seen this syntax a few times now: * <code>slice</code> is a <code>dplyr</code> function that selects rows, as specified by row number. * A negative row number denoted by <code>-</code> signifies to <strong>drop</strong> the specified row. * Since the first row is the column names and not data, <code>slice(-1)</code> is used to drop the first row after combining the matrices into one table.</p>
+<pre class="r"><code>output_combined &lt;- do.call(rbind, output_named) %&gt;%  
   as.data.frame() %&gt;%   
-  # Remove the first row (column names)
-  slice(-1)                                      
-
-# Inspect: What data types do we have in the columns?
-# The glimpse() function lists each column, the data type, and the first few values
-# All factors &lt;fct&gt;
-glimpse(output_combined)</code></pre>
+  slice(-1)                                      </code></pre>
+<p>Inspect the combined table. <code>glimpse()</code> lists each column, the data type, and the first few rows’ worth of values of the column. Note that all columns have been converted to factors (<code>&lt;fct&gt;</code>).</p>
+<pre class="r"><code>glimpse(output_combined)</code></pre>
 <pre><code>## Observations: 645
 ## Variables: 8
 ## $ `Notice Date`       &lt;fct&gt; 06/22/2017, 06/23/2017, 06/23/2017, 06/30/...
@@ -965,6 +906,10 @@ glimpse(output_combined)</code></pre>
 </div>
 <div id="apply-formatting" class="section level3">
 <h3>3. Apply formatting</h3>
+<ul>
+<li><code>clean_names()</code> is a <code>janitor</code> function that returns R-compatible column names. Its default settings are to remove special characters, convert spaces in names to <code>_</code> and all characters to lowercase.</li>
+<li><code>mutate_at()</code> applies a specified function <code>.funs</code> to specified columns <code>.vars</code>. Here it is used to convert the date columns to dates and <code>no_of_employees</code> to a number.</li>
+</ul>
 <pre class="r"><code># Convert dates to dates, no_of_employees to a number
 output_clean &lt;- output_combined %&gt;% 
   # Clean up the name syntax to be a consistent format
@@ -974,10 +919,9 @@ output_clean &lt;- output_combined %&gt;%
             .funs = function(x) as.Date(x, format = &quot;%m/%d/%Y&quot;)) %&gt;% 
   # Set numeric format
   mutate_at(.vars = &quot;no_of_employees&quot;,
-            .funs = as.numeric)
-
-# Look at the data types after type conversion
-glimpse(output_clean)</code></pre>
+            .funs = as.numeric)</code></pre>
+<p>Inspect the formatted table. Note the new column names and types.</p>
+<pre class="r"><code>glimpse(output_clean)</code></pre>
 <pre><code>## Observations: 645
 ## Variables: 8
 ## $ notice_date     &lt;date&gt; 2017-06-22, 2017-06-23, 2017-06-23, 2017-06-3...
@@ -990,14 +934,13 @@ glimpse(output_clean)</code></pre>
 ## $ layoff_closure  &lt;fct&gt; Layoff Permanent, Layoff Unknown at this time,...</code></pre>
 </div>
 </div>
-<div id="write-output-to-csv" class="section level2">
-<h2>Write output to csv</h2>
-<p>Unless specified otherwise, R will write to the current working directory</p>
-<pre class="r"><code># Print path of current working directory
-getwd()</code></pre>
+<div id="optional-write-output-to-csv" class="section level2">
+<h2>Optional: Write output to csv</h2>
+<p>Unless specified otherwise, R will write to the current working directory.</p>
+<p><code>getwd()</code> prints the name of the current working directory, the default output destination of <code>write.csv()</code>.</p>
+<pre class="r"><code>getwd()</code></pre>
 <pre><code>## [1] &quot;C:/Users/alex/Documents/Leila/read_pdf&quot;</code></pre>
-<pre class="r"><code># Write output
-write.csv(output_clean, &quot;filename.csv&quot;)</code></pre>
+<pre class="r"><code>write.csv(output_clean, &quot;filename.csv&quot;)</code></pre>
 </div>
 </div>
 

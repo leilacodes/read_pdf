@@ -8,17 +8,17 @@ output:
     toc_float: true
 ---
 
-_Anyone who has worked with data knows that collecting it into an analyzable format is the first hurdle after a project is defined. Even for analysts who are the lucky recipients of curated, clean data, this is rarely a trivial task and can easily become a time-consuming and tedious nightmare. Luckily, since it's such a common problem, many programming angels have written helpful function packages to assist this process._
+Anyone who has worked with data knows that collecting it into an analyzable format is the first hurdle after a project is defined. Even for analysts who are the lucky recipients of curated, clean data, this is rarely a trivial task and can easily become a time-consuming and tedious distraction from the data analysis. Luckily, since it’s such a common problem, many programming angels have written helpful function packages to assist this process.
 
-_This data import series will walk through examples which use various R packages to import data freely available online. It's intended as a beginner series, so each post will include both the minimal code snippet to complete the task at hand + an annotated version exaplaining what's going on in each line._
+This data import series will walk through examples which use various R packages to import data freely available online. It’s intended as a beginner series, so each post will include both the minimal code snippet to complete the task at hand + an annotated version explaining what’s going on in each line.
 
-_I've included in the annotated segments the exploratory code used to determine how to manipulate the data into the desired format. While this intermediate exploration wouldn't appear in production code, it's an unavoidable step that will look different with each new project, so I've included it to illustrate a more complete picture of the data import process. It is not meant to represent or be confused with exploratory data analysis (the in-depth look at the data that comes after it is prepared), though the two steps often overlap._
+I’ve included in the annotated segments the exploratory code used to determine how to manipulate the data into the desired format. While this intermediate exploration wouldn’t appear in production code, it’s an unavoidable step that will look different with each new project, so I’ve included it to illustrate a more complete picture of the data import process. It is not meant to represent or be confused with exploratory data analysis (the in-depth look at the data that comes after it is prepared), though the two steps often overlap.  
 
 ## Task: Import PDF Data
 
 This example uses the R library **tabulizer** for importing a dataset stored as a table in a PDF document.  It's adapted from a [tutorial by Troy Walters](https://www.r-bloggers.com/extracting-tables-from-pdfs-in-r-using-the-tabulizer-package/) on R-Bloggers. The sample data is from the California Employment Development Department, which publishes a yearly [list of layoffs](https://www.edd.ca.gov/jobs_and_training/Layoff_Services_WARN.htm) in the state of California that fall under the WARN act. The file used is the [2017-2018 Warn Report](https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf), containing layoffs from July 1, 2017 through June 30, 2018.
 
-The data is relatively clean to start with: the PDF is machine readable, and the data is in a table format.
+The data is relatively clean to start with: the PDF is machine readable, and the data is in a table format.  
 
 ## R Session Setup
 
@@ -33,138 +33,195 @@ library(knitr) # For html formatting
 
 Load function libraries that will be used. Libraries need only be installed once, but they need to be loaded each new R session.
 
+**tabulizer** is used for its `extract_tables` function to read PDFs.
+**dplyr** is used for convenient, easy-to-read data wrangling
+**janitor** is used to clean up table name formatting  
+
 ```{r libs, warning=FALSE}
-# Load function libraries
-
-library(tabulizer) # For reading the PDFS
-library(dplyr, warn.conflicts = FALSE) # For intuitive data manipulation
-library(purrr) # For combining output of each page into one table
-library(janitor) # For cleaning up row name formatting
-
+library(tabulizer)
+library(dplyr, warn.conflicts = FALSE)
+library(janitor)
 ```
 
-# TL;DR
+***
 
-Just the essential lines to import, clean, and export the data
+# Section 1: TL;DR
+
+> Just the essential lines to import, clean, and export the data. 
+
+Specify location of PDF (can be a URL or local file path):  
+
+```{r specify}
+data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
+```
+
+Use the extract_tables() function to scan the file and pull data tables:  
+
+```{r extract}
+output <- tabulizer::extract_tables(data_url)
+```
+
+Grab the column names, which are the first row of page 1:  
+
+```{r getnames}
+column_names <- output[[1]][1,] 
+```
+
+Set the column names in the output and save as new list:  
+
+```{r setnames}
+output_named <- lapply(
+  X = output,
+  FUN = function(x) {
+  named_table <- x           
+  colnames(named_table) <- column_names  
+  return(named_table)   
+  }) 
+```
+
+Combine the list items:
 
 ```{r}
-# Specify location of PDF (can be a URL or local file path)
-data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
-
-# Use the extract_tables() function to scan the file and pull data tables:
-output <- tabulizer::extract_tables(data_url)
-
-# Save the first row of page 1 as a character vector:
-# Subset output to the first page, first row, all columns
-column_names <- output[[1]][1,] 
-
-# Set the column names for each page and save as new list
-output_named <- purrr::map(
-  # Specify list object
-  .x = output,
-  .f = function(x) {  
-    named_table <- x           
-    colnames(named_table) <- column_names  
-    return(named_table)   
-    }) 
-
-# Combine the list items
 output_combined <- do.call(rbind, output_named) %>%  
   as.data.frame() %>%   
   slice(-1)    
+```
 
-# Clean col names, convert dates to dates, convert no_of_employees to a number
+Clean column names, convert dates to dates, convert `no_of_employees` to a number:
+
+```{r}
 output_clean <- output_combined %>% 
   clean_names() %>% 
-  mutate_at(.vars = c("notice_date", "effective_date", "received_date"),
+  mutate_at(.vars = c("notice_date",
+                      "effective_date",
+                      "received_date"),
             .funs = function(x) as.Date(x, format = "%m/%d/%Y")) %>% 
   mutate_at(.vars = "no_of_employees",
             .funs = as.numeric)
 
-# All done
-# Write output
-write.csv(output_clean, "filename.csv")
-
 ```
 
-Top of the table:
+Optional: write output to a csv. By default, write.csv() will write the file to the current working directory. To view the current working directory, run `getwd()` in the console.
+
+```{r writecsv, eval = FALSE}
+write.csv(output_clean, "filename.csv")
+```
+
+### All done! Here's what the top of the table looks like:
+
 `r head(output_clean) %>% kable() %>% kable_styling()`
+
+***
 
 # Detailed Process Description
 
+> This section is a more heavily-annotated version of the code above, **plus** the exploratory code used to determine each step.
+
+The pipe `%>%` is a convenient function loaded with the `dplyr` package (originally from the `magrittr` package). It allows us to chain tasks together in a flow. When a `%>%` appears between two functions, the output from the former function is "funneled" into the latter function as its input.
+
 ## PDF import
 
-```{r import}
-# Specify location of PDF (can be a URL or local file path)
-data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
+Specify location of PDF (can be a URL or local file path):  
 
-# Use the extract_tables() function to scan the file and pull data tables:
+```{r specify2}
+data_url <- 'https://www.edd.ca.gov/jobs_and_training/warn/WARN-Report-for-7-1-2017-to-06-30-2018.pdf' 
+```
+
+Use the extract_tables() function to scan the file and pull data tables:  
+
+```{r extract2}
 output <- tabulizer::extract_tables(data_url)
 ```
 
-### Inspect extraction output
+### Exploratory: Inspect extraction output
 
-Observations: 
+Look at the form and contents of the output in order to determine what to do with it.
 
-* Output is a list (set of items), with one list item per page
-* Each list item is a matrix with 8 columns
+What type of object is returned by `extract_tables()`?
 
-Observed tasks for later:
-
-* A matrix can only have one data type, so all data was imported as character strings. Type conversion will need to be done
-* The column names got imported as the first row of data on the first page
-
-```{r check}
-
-# What type of object?
+```{r classout}
 class(output)
+```
 
-# How many list objects?
+How many list objects?
+
+```{r lengthout}
 length(output)
+```
 
-# What is the type of object for each list item?
+The list consists of one item per page of the PDF. 
+
+What type of object are these list items?
+
+```{r typeout}
 lapply(output, class) %>% 
   unlist() %>%
   unique()
+```
 
-# What is the data type in the matrices?
+Each item is a matrix. 
+
+A matrix is a 2-dimensional array of values of uniform type. What is the data type of the matrices?
+
+```{r typemat}
 lapply(output,
-       function(x) class(x[1,1])) %>% unlist() %>% 
+       function(x) class(x[1,1])) %>% 
+  unlist() %>% 
   unique()
+```
 
-# What's the dimension of each list item?
+What's the dimension of each list item?
+
+After `lapply` returns a list of the dimensions of each matrix, `do.call` funnels them in as the arguments to the `rbind` function, effectively binding the rows into one table.
+
+```{r dimmat}
 lapply(output, dim) %>%
   do.call(rbind, .)
+```
 
-# Check that the last page loaded correctly 
-# We can verify by looking at the file that this is correct
-output[[length(output)]] %>%        # Subset to last list item
-  head(n = 1) %>%                  # Subset to first row
-  as.data.frame() %>% 
-  kable() %>%           # print data as table
-  kable_styling()       # format the table for html output
+Except for the first and last, the matrices have 48 rows x 8 columns.
 
+Look at the data: print the top and bottom 3 rows of the file.
 
-output[[length(output)]] %>% 
-  tail(n = 1) %>% 
-  as.data.frame() %>%
-  kable() %>%
-  kable_styling()
+* The `[[ ]]` notation specifies which list item(s) to select. `length(output)` lets us access the last list item. 
+* `head` and `tail` print the top and bottom (respectively) of the object (in this case, a matrix). `n` denotes how many elements (in this case, rows) to print. 
+* The `kable-` lines are for presentation only -- they stylize the data printout.
 
-# Print the top and bottom 3 rows of the file
-
-# Top of first list item
+```{r printends}
 head(output[[1]], n = 3) %>% 
   as.data.frame() %>%
   kable() %>%
   kable_styling()
 
-# Bottom of last list item
 tail(output[[length(output)]], n = 3) %>% 
   as.data.frame() %>% 
   kable() %>%
   kable_styling()
 ```
+
+Quality check: Look at the first and last row of the last page to Check that it loaded correctly. (Same code structure as above).
+
+```{r checklast}
+output[[length(output)]] %>%  
+  head(n = 1) %>%             
+  kable() %>%           
+  kable_styling()       
+
+output[[length(output)]] %>% 
+  tail(n = 1) %>% 
+  kable() %>%
+  kable_styling()
+```
+
+Key Observations: 
+
+* The output of `extract_tabbles()` is a list, with one list item per page.
+* Each list item is a matrix with 8 columns.
+
+Observed tasks for later:
+
+* A matrix can only have one data type, so all data was imported as character strings. Type conversion will need to be done.
+* The column names got imported as the first row of data on the first page.
 
 ## Organize output into an analyzable format
 
@@ -176,54 +233,56 @@ Tasks:
 
 ### 1. Set column names
 
-```{r getnames}
-# Save the first row of page 1 as a character vector. 
-# Subset output to the first page, first row, all columns
-column_names <- output[[1]][1,] 
+Save the first row of page 1 as a character vector. 
 
-# View it
-# It's messy with special characters, so it will have to be cleaned later.
+* `[[1]]` subsets the output to the data from the first page of the PDF (a matrix)
+* `[1,]` subsets the matrix to the first row. The blank after the `,` means that no columns are specified, so all columns will be returned. 
+
+```{r getnames2}
+column_names <- output[[1]][1,] 
 column_names
 ```
 
+Set the column names for each page and save as new list called `output_named`.
 
+* `lapply` applies the specified function `FUN` to each list item from list `X`. 
+* `function(x) {...}` defines a function which sets `column_names` as the column names of the matrix `x`, then returns the named matrix as the function output.
 
-```{r setnames}
-# Set the column names for each page and save as new list
-output_named <- purrr::map(
-  # Specify list object
-  .x = output,     
-  # Write a function to set col names for each list item
-  .f = function(x) {  
-    # Get list item
-    named_table <- x           
-    # Set column names
+```{r setnames2}
+output_named <- lapply(
+  X = output,     
+  FUN = function(x) {
+    named_table <- x  
     colnames(named_table) <- column_names  
-    # Return named list item as output
     return(named_table)   
     }) 
 ```
 
 ### 2. Combine list items into 1 table
 
-```{r combine}
-# Combine the list items
+We've seen this syntax a few times now:
+* `slice` is a `dplyr` function that selects rows, as specified by row number.
+* A negative row number denoted by `-` signifies to **drop** the specified row.
+* Since the first row is the column names and not data, `slice(-1)` is used to drop the first row after combining the matrices into one table.
+
+```{r combine2}
 output_combined <- do.call(rbind, output_named) %>%  
-  # Convert to a data frame format
   as.data.frame() %>%   
-  # Remove the first row (column names)
   slice(-1)                                      
+```
 
-# Inspect: What data types do we have in the columns?
-# The glimpse() function lists each column, the data type, and the first few values
-# All factors <fct>
+Inspect the combined table. `glimpse()` lists each column, the data type, and the first few rows' worth of values of the column. Note that all columns have been converted to factors (`<fct>`).
+
+```{r inspectall}
 glimpse(output_combined)
-
 ```
 
 ### 3. Apply formatting
 
-```{r cleanup}
+* `clean_names()` is a `janitor` function that returns R-compatible column names. Its default settings are to remove special characters, convert spaces in names to `_` and all characters to lowercase.
+* `mutate_at()` applies a specified function `.funs` to specified columns `.vars`. Here it is used to convert the date columns to dates and `no_of_employees` to a number.
+
+```{r cleanup2}
 
 # Convert dates to dates, no_of_employees to a number
 output_clean <- output_combined %>% 
@@ -235,21 +294,25 @@ output_clean <- output_combined %>%
   # Set numeric format
   mutate_at(.vars = "no_of_employees",
             .funs = as.numeric)
-
-# Look at the data types after type conversion
-glimpse(output_clean)
-
 ```
 
-## Write output to csv
+Inspect the formatted table. Note the new column names and types.
 
-Unless specified otherwise, R will write to the current working directory
+```{r inspectagain}
+glimpse(output_clean)
+```
 
-```{r output}
-# Print path of current working directory
+## Optional: Write output to csv
+
+Unless specified otherwise, R will write to the current working directory.
+
+`getwd()` prints the name of the current working directory, the default output destination of `write.csv()`.
+
+```{r getwd}
 getwd()
+```
 
-# Write output
+```{r writeout}
 write.csv(output_clean, "filename.csv")
 ```
 
